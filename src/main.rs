@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::{fs::File, f32::INFINITY};
 use std::io::Write;
 use glam::{Vec3, vec3};
 use indicatif::ProgressIterator;
@@ -23,27 +23,74 @@ impl Ray {
     }
 }
 
-fn hit_sphere(center: Point3, radius: f32, ray: &Ray) -> Option<f32> {
-    let oc = ray.orig - center;
-    let a = ray.dir.length_squared();
-    let half_b = oc.dot(ray.dir);
-    let c = oc.length_squared() - radius*radius;
-    let discriminant = half_b*half_b - a*c;
-    
-    if discriminant < 0.0 {
-        None
-    } else {
-        let t = (-half_b - discriminant.sqrt()) / a;
-        Some(t)
+struct HitRecord {
+    point: Point3,
+    normal: Vec3,
+    t: f32,
+    front_face: bool,
+}
+
+impl HitRecord {
+    fn new_from_ray(out_normal: Vec3, t: f32, ray: &Ray) -> HitRecord {
+        let front_face =  ray.dir.dot(out_normal) < 0.0;
+        let normal = if front_face { out_normal } else { -out_normal };
+        HitRecord { point: ray.at(t), normal: normal, t: t, front_face: front_face }
     }
 }
 
-fn ray_color(ray: Ray) -> Color {
-    let circle_center = vec3(0.0, 0.0, -1.0);
-    if let Some(t) = hit_sphere(circle_center, 0.5, &ray)
+trait Hittable {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord>;
+}
+
+struct Sphere {
+    center: Point3,
+    radius: f32,
+}
+
+impl Hittable for Sphere {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<HitRecord> {
+        let oc = ray.orig - self.center;
+        let a = ray.dir.length_squared();
+        let half_b = oc.dot(ray.dir);
+        let c = oc.length_squared() - self.radius*self.radius;
+        let discriminant = half_b*half_b - a*c;
+        
+        if discriminant < 0.0 {
+            None
+        } else {
+            let sqrtd = discriminant.sqrt();
+            let small_root = (-half_b - sqrtd) / a;
+            let root = if small_root <= t_min || small_root >= t_max
+            {
+                let big_root = (-half_b + sqrtd) / a;
+                if big_root <= t_min || big_root >= t_max {
+                    None
+                } else {
+                    Some(big_root)
+                }
+            } else {
+                Some(small_root)
+            };
+
+            let t = root?;
+            let hit_point = ray.at(t);
+            let outward_normal = (hit_point - self.center) / self.radius;
+            Some(HitRecord::new_from_ray(outward_normal, t, &ray))
+        }
+    }
+}
+
+fn ray_color(ray: Ray, world: &Vec<Box<dyn Hittable>>) -> Color {
+
+    if let Some(hr) = world.iter()
+        .fold(None, |acc, elem| {
+            match acc {
+                None => elem.hit(&ray, 0.0, INFINITY),
+                Some(hr) => elem.hit(&ray, 0.0, hr.t).or(Some(hr))
+            }
+        })
     {
-        let normal = ray.at(t) - circle_center;
-        let normal = normal.normalize();
+        let normal = hr.normal;
         return 0.5 * vec3(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0);
     }
 
@@ -60,6 +107,13 @@ fn main() {
     // ensure image height is at least 1
     let image_height = ((image_width as f32) / aspect_ratio) as i32;
     let image_height = if image_height < 1 { 1 } else { image_height };
+
+    // World
+
+    let mut world: Vec<Box<dyn Hittable>> = Vec::new();
+    world.push(Box::new(Sphere{ center: vec3(0.0, 0.0, -1.0), radius: 0.5}));
+    world.push(Box::new(Sphere{ center: vec3(0.0, 0.5, -1.0), radius: 0.2}));
+    world.push(Box::new(Sphere{ center: vec3(0.0, -100.5, -1.0), radius: 100.0}));
 
     // camera
     let focal_length = 1.0;
@@ -88,7 +142,7 @@ fn main() {
             let ray_direction = pixel_center - camera_center;
             let ray = Ray{orig: camera_center, dir: ray_direction};
 
-            ray_color(ray)
+            ray_color(ray, &world)
         });
 
     // create the file
