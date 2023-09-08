@@ -25,15 +25,15 @@ impl Ray {
 
 fn hit_sphere(center: Point3, radius: f32, ray: &Ray) -> Option<f32> {
     let oc = ray.orig - center;
-    let a = ray.dir.dot(ray.dir);
-    let b = 2.0 * oc.dot(ray.dir);
-    let c = oc.dot(oc) - radius*radius;
-    let discriminant = b*b - 4.0*a*c;
+    let a = ray.dir.length_squared();
+    let half_b = oc.dot(ray.dir);
+    let c = oc.length_squared() - radius*radius;
+    let discriminant = half_b*half_b - a*c;
     
     if discriminant < 0.0 {
         None
     } else {
-        let t = (-b - discriminant.sqrt()) / (2.0 * a);
+        let t = (-half_b - discriminant.sqrt()) / a;
         Some(t)
     }
 }
@@ -42,7 +42,6 @@ fn ray_color(ray: Ray) -> Color {
     let circle_center = vec3(0.0, 0.0, -1.0);
     if let Some(t) = hit_sphere(circle_center, 0.5, &ray)
     {
-
         let normal = ray.at(t) - circle_center;
         let normal = normal.normalize();
         return 0.5 * vec3(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0);
