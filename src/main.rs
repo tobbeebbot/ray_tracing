@@ -4,8 +4,8 @@ use glam::{Vec3, vec3};
 use indicatif::ProgressIterator;
 use itertools::{self, Itertools};
 
-type PColor = Vec3;
-fn stringify_color(color: PColor) -> String {
+type Color = Vec3;
+fn stringify_color(color: Color) -> String {
     format!("{} {} {}", 
         color.x * 255.99, 
         color.y * 255.99,
@@ -23,14 +23,37 @@ impl Ray {
     }
 }
 
-fn ray_color(ray: Ray) -> PColor {
+fn hit_sphere(center: Point3, radius: f32, ray: &Ray) -> Option<f32> {
+    let oc = ray.orig - center;
+    let a = ray.dir.dot(ray.dir);
+    let b = 2.0 * oc.dot(ray.dir);
+    let c = oc.dot(oc) - radius*radius;
+    let discriminant = b*b - 4.0*a*c;
+    
+    if discriminant < 0.0 {
+        None
+    } else {
+        let t = (-b - discriminant.sqrt()) / (2.0 * a);
+        Some(t)
+    }
+}
+
+fn ray_color(ray: Ray) -> Color {
+    let circle_center = vec3(0.0, 0.0, -1.0);
+    if let Some(t) = hit_sphere(circle_center, 0.5, &ray)
+    {
+
+        let normal = ray.at(t) - circle_center;
+        let normal = normal.normalize();
+        return 0.5 * vec3(normal.x + 1.0, normal.y + 1.0, normal.z + 1.0);
+    }
+
     let unit_direction = ray.dir.normalize();
     let a = 0.5*(unit_direction.y + 1.0);
     vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), a)
 }
 
 fn main() {
-
     // image
     let aspect_ratio = 16.0 / 9.0;
     let image_width = 400;
