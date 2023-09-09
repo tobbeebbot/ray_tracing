@@ -1,3 +1,4 @@
+use crate::interval::Interval;
 use crate::ray::{Ray, Point};
 use crate::hittable::Hittable;
 use glam::{vec3, Vec3};
@@ -5,6 +6,7 @@ use indicatif::ProgressIterator;
 use std::f32::INFINITY;
 use std::io::Write;
 use itertools::{self, Itertools};
+use rand::prelude::*;
 
 pub struct Camera {
     pub aspect_ratio: f32,
@@ -14,6 +16,7 @@ pub struct Camera {
     pixel00_loc: Point,
     pixel_delta_u: Vec3,
     pixel_delta_v: Vec3,
+    samples_per_pixel: u32,
 }
 type Color = Vec3;
 fn stringify_color(color: &Color) -> String {
@@ -35,7 +38,8 @@ impl Camera {
         let focal_length = 1.0;
         let viewport_height = 2.0;
         let viewport_width = viewport_height * (image_width as f32 / image_height as f32);
-        let camera_center : Point = vec3(0.0, 0.0, 0.0);
+        let center : Point = vec3(0.0, 0.0, 0.0);
+        let samples_per_pixel = 10;
         
         // Calculate the vectors across the horizontal and down the vertical viewport edges.
         let viewport_u = vec3(viewport_width, 0.0, 0.0);
@@ -46,17 +50,18 @@ impl Camera {
         let pixel_delta_v = viewport_v / image_height as f32;
     
         // Calculate the location of the upper left pixel.
-        let viewport_upper_left = camera_center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+        let viewport_upper_left = center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
         let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
     
         Camera {
-            aspect_ratio: aspect_ratio,
-            image_width: image_width,
-            image_height: image_height,
-            center: camera_center,
-            pixel00_loc: pixel00_loc,
-            pixel_delta_u: pixel_delta_u,
-            pixel_delta_v: pixel_delta_v
+            aspect_ratio,
+            image_width,
+            image_height,
+            center: center,
+            pixel00_loc,
+            pixel_delta_u,
+            pixel_delta_v,
+            samples_per_pixel,
         }
     }
 
@@ -65,15 +70,11 @@ impl Camera {
             .cartesian_product(0..self.image_width)
             .progress_count(self.image_height as u64 * self.image_width as u64)
             .map(|(j, i)| {
-                let pixel_center =
-                    self.pixel00_loc + (i as f32 * self.pixel_delta_u) + (j as f32 * self.pixel_delta_v);
-                let ray_direction = pixel_center - self.center;
-                let ray = Ray {
-                    orig: self.center,
-                    dir: ray_direction,
-                };
-
-                Self::ray_color(&ray, &world)
+                let pixel_sum = (0..self.samples_per_pixel)
+                    .map(|_| self.get_ray(i, j))
+                    .map(|ray| Self::ray_color(&ray, &world))
+                    .sum::<Color>();
+                pixel_sum / self.samples_per_pixel as f32
             });
         
         // create the file
@@ -87,11 +88,31 @@ impl Camera {
         .expect("Should be able to write to it as well.");
     }
 
+    fn get_ray(&self, i: u32, j: u32) -> Ray {
+        let pixel_center =
+                    self.pixel00_loc + (i as f32 * self.pixel_delta_u) + (j as f32 * self.pixel_delta_v);
+        let pixel_sample = pixel_center + self.pixel_sample_square();
+
+        let ray_origin = self.center;
+        let ray_direction = pixel_sample - ray_origin;
+        Ray {
+            orig: ray_origin,
+            dir: ray_direction,
+        }
+    }
+
+    fn pixel_sample_square(&self) -> Vec3 {
+        let mut rng = rand::thread_rng();
+        let px = -0.5 + rng.gen::<f32>();
+        let py = -0.5 + rng.gen::<f32>();
+        px * self.pixel_delta_u + py * self.pixel_delta_v
+    }
+
     fn ray_color(ray: &Ray, world: &Vec<Box<dyn Hittable>>) -> Color {
         let ray_trace = world.iter().fold(None, |acc, elem| 
             match acc {
-                None => elem.hit(&ray, 0.0..INFINITY),
-                Some(hr) => elem.hit(&ray, 0.0..hr.t).or(Some(hr)),
+                None => elem.hit(&ray, Interval::new(0.0, INFINITY)),
+                Some(hr) => elem.hit(&ray, Interval::new(0.0, hr.t)).or(Some(hr)),
             });
 
         if let Some(hit_record) = ray_trace {
