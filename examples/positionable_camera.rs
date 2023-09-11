@@ -26,7 +26,8 @@ fn main() {
         .set_samples_per_pixel(100)
         .set_max_depth(50)
         .set_view_direction(vec3(-2.0, 2.0, 1.0), vec3(0.0, 0.0, -1.0))
-        .set_vfov(35.0)
+        .set_vfov(20.0)
+        .set_focus(11.0, 3.4)
         .build();
 
     // cam.samples_per_pixel = 100;
