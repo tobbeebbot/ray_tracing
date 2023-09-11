@@ -57,8 +57,9 @@ impl Material {
                 };
                 let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
                 let cannot_refract = refraction_ratio * sin_theta > 1.0;
+                let schlick_reflect = reflectance(cos_theta, refraction_ratio) > rand::thread_rng().gen::<f32>();
 
-                let direction = if cannot_refract {
+                let direction = if cannot_refract || schlick_reflect {
                     reflect(unit_direction, hit_record.normal)
                 } else {
                     refract(unit_direction, hit_record.normal, refraction_ratio)
@@ -115,4 +116,11 @@ fn refract(unit_in_vector: Vec3, normal: Vec3, etai_over_etat: f32) -> Vec3 {
     let r_out_perp = etai_over_etat * (unit_in_vector + (normal * cos_theta));
     let r_out_parallel = -((1.0 - r_out_perp.length_squared()).abs().sqrt()) * normal;
     r_out_perp + r_out_parallel
+}
+
+fn reflectance(cosine: f32, ref_idx: f32) -> f32 {
+    // Use Schlick's approximation for reflectance.
+    let mut r0 = (1.0 - ref_idx) / (1.0 + ref_idx);
+    r0 = r0*r0;
+    r0 + (1.0 - r0) * (1.0 - cosine).powf(5.0)
 }

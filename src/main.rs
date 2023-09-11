@@ -8,7 +8,7 @@ use ray_tracing::material::Material::*;
 fn main() {
     // image
     let aspect_ratio = 16.0 / 9.0;
-    let image_width = 400;
+    let image_width = 800;
     
     // Materials
     let material_ground = Rc::new(Lambertian(vec3(0.8, 0.8, 0.0)));
