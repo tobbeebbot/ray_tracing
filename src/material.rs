@@ -48,9 +48,23 @@ impl Material {
                 };
 
                 let unit_direction = ray.dir.normalize();
-                let refracted_direction = refract(unit_direction, hit_record.normal, refraction_ratio);
 
-                let scattered_ray = Ray::new(hit_record.point, refracted_direction);
+                let normal_dot_uiv = (-unit_direction).dot(hit_record.normal);
+                let cos_theta = if normal_dot_uiv > 1.0 {
+                    1.0
+                } else {
+                    normal_dot_uiv
+                };
+                let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+                let cannot_refract = refraction_ratio * sin_theta > 1.0;
+
+                let direction = if cannot_refract {
+                    reflect(unit_direction, hit_record.normal)
+                } else {
+                    refract(unit_direction, hit_record.normal, refraction_ratio)
+                };
+
+                let scattered_ray = Ray::new(hit_record.point, direction);
 
                 Some((scattered_ray, attenuation))
             }
