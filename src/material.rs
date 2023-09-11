@@ -84,14 +84,17 @@ fn random_unit_vector() -> Vec3 {
 //     }
 // }
 
-fn random_in_unit_sphere() -> Vec3 {
+pub fn random_vec() -> Vec3 {
     let mut rng = rand::thread_rng();
-    
+    vec3(
+        rng.gen_range(-1.0..=1.0),
+        rng.gen_range(-1.0..=1.0),
+        rng.gen_range(-1.0..=1.0))
+}
+
+fn random_in_unit_sphere() -> Vec3 {
     loop {
-        let vec = vec3(
-            rng.gen_range(-1.0..=1.0),
-            rng.gen_range(-1.0..=1.0),
-            rng.gen_range(-1.0..=1.0));
+        let vec = random_vec();
 
         if vec.length_squared() < 1.0 {
             break vec;
