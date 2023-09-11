@@ -8,6 +8,81 @@ use std::io::Write;
 use itertools::{self, Itertools};
 use rand::prelude::*;
 
+#[derive(Copy, Clone)]
+pub struct CameraBuilder {
+    vfov: f32,  // Vertical view angle (field of view)
+    samples_per_pixel: u32,
+    max_depth: u32,
+
+    look_from: Point,  // Point camera is looking from
+    look_at: Point,   // Point camera is looking at
+    vup: Vec3,     // Camera-relative "up" direction
+
+    image_width: u32,
+    aspect_ratio: f32,
+}
+
+impl CameraBuilder {
+    pub fn default() -> CameraBuilder {
+        // camera
+        let vfov = 90.0;  // Vertical view angle (field of view)
+        let look_from = Point::new(0.0, 0.0, 0.0);  // Point camera is looking from
+        let look_at   = Point::new(0.0, 0.0, -1.0);   // Point camera is looking at
+        let vup      = vec3(0.0, 1.0, 0.0);     // Camera-relative "up" direction
+        
+        let max_depth = 64;
+        let samples_per_pixel = 64;
+    
+        let image_width = 400;
+        let aspect_ratio = 16.0 / 9.0;
+    
+        CameraBuilder { vfov, samples_per_pixel, max_depth, look_from, look_at, vup, image_width, aspect_ratio }
+    }
+
+    pub fn set_aspect_ratio(&mut self, ratio: f32) -> CameraBuilder {
+        self.aspect_ratio = ratio;
+        self.clone()
+    }
+
+    pub fn set_image_width(&mut self, width: u32) -> CameraBuilder {
+        self.image_width = width;
+        self.clone()
+    }
+
+    pub fn set_max_depth(&mut self, max_depth: u32) -> CameraBuilder {
+        self.max_depth = max_depth;
+        self.clone()
+    }
+
+    pub fn set_samples_per_pixel(&mut self, samples: u32) -> CameraBuilder {
+        self.samples_per_pixel = samples;
+        self.clone()
+    }
+
+    pub fn set_view_direction(&mut self, look_from: Point, look_at: Point) -> CameraBuilder {
+        self.look_from = look_from;
+        self.look_at = look_at;
+        self.clone()
+    }
+
+    pub fn set_vfov(&mut self, vfov: f32) -> CameraBuilder {
+        self.vfov = vfov;
+        self.clone()
+    }
+
+    pub fn build(&self) -> Camera {
+        Camera::new(
+            self.image_width,
+            self.aspect_ratio,
+            self.vfov,
+            self.samples_per_pixel,
+            self.max_depth,
+            self.look_from,
+            self.look_at,
+            self.vup)
+    }
+}
+
 pub struct Camera {
     pub aspect_ratio: f32,
     pub image_width: u32,
@@ -33,29 +108,45 @@ fn linnear_to_gamma(color: &Color) -> Color {
 }
 
 impl Camera {
-    pub fn new(image_width: u32, aspect_ratio: f32) -> Camera {
+    pub fn new(
+        image_width: u32,
+        aspect_ratio: f32,
+        vfov: f32,
+        samples_per_pixel: u32,
+        max_depth: u32,
+        look_from: Point,
+        look_at: Point,
+        vup: Vec3) -> Camera
+    {
         // ensure image height is at least 1
         let image_height = ((image_width as f32) / aspect_ratio) as u32;
         let image_height = if image_height < 1 { 1 } else { image_height };
     
-        // camera
-        let focal_length = 1.0;
-        let viewport_height = 2.0;
-        let viewport_width = viewport_height * (image_width as f32 / image_height as f32);
-        let center : Point = vec3(0.0, 0.0, 0.0);
-        let samples_per_pixel = 128;
-        let max_depth = 128;
+        let focal_length = (look_from - look_at).length();
         
+        let theta = Self::degrees_to_radians(vfov);
+        let h = (theta/2.0).tan();
+
+        let viewport_height = 2.0 * h * focal_length;
+        let viewport_width = viewport_height * (image_width as f32 / image_height as f32);
+
+        let center = look_from;
+
+        // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
+        let w = (look_from - look_at).normalize();
+        let u = vup.cross(w).normalize();
+        let v = w.cross(u);
+
         // Calculate the vectors across the horizontal and down the vertical viewport edges.
-        let viewport_u = vec3(viewport_width, 0.0, 0.0);
-        let viewport_v = vec3(0.0, -viewport_height, 0.0);
+        let viewport_u = viewport_width * u;   // Vector across viewport horizontal edge
+        let viewport_v = viewport_height * -v; // Vector down viewport vertical edge
     
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
         let pixel_delta_u = viewport_u / image_width as f32;
         let pixel_delta_v = viewport_v / image_height as f32;
     
         // Calculate the location of the upper left pixel.
-        let viewport_upper_left = center - vec3(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+        let viewport_upper_left = center - (focal_length * w) - viewport_u / 2.0 - viewport_v / 2.0;
         let pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
     
         Camera {
@@ -143,6 +234,9 @@ impl Camera {
         px * self.pixel_delta_u + py * self.pixel_delta_v
     }
 
+    fn degrees_to_radians(degrees: f32) -> f32 {
+        degrees * std::f32::consts::PI / 180.0
+    }
 
     
 
