@@ -3,6 +3,7 @@ use rand::prelude::*;
 
 use crate::{ray::Ray, hittable::HitRecord, camera::Color};
 
+#[derive(Clone)]
 pub enum Material {
     Lambertian(Color), // color = "albedo"
     Metal(Color, f32), // albedo, fuzz

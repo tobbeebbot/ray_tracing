@@ -1,12 +1,13 @@
 use crate::interval::Interval;
 use crate::ray::{Ray, Point};
-use crate::hittable::Hittable;
+use crate::hittable::{Hittable, Shape};
 use glam::{vec3, Vec3};
-use indicatif::ProgressIterator;
+use indicatif::ParallelProgressIterator;
 use std::f32::INFINITY;
 use std::io::Write;
 use itertools::{self, Itertools};
 use rand::prelude::*;
+use rayon::prelude::*;
 
 #[derive(Copy, Clone)]
 pub struct CameraBuilder {
@@ -187,21 +188,24 @@ impl Camera {
         }
     }
 
-    pub fn render(&self, world: Vec<Box<dyn Hittable>>) -> () {
+    pub fn render(&self, world: Vec<Shape>) -> () {
         let pixel_colors = (0..self.image_height)
             .cartesian_product(0..self.image_width)
+            .collect::<Vec<(u32, u32)>>()
+            .into_par_iter()
             .progress_count(self.image_height as u64 * self.image_width as u64)
             .map(|(j, i)| {
                 let pixel_sum = (0..self.samples_per_pixel)
-                    .map(|_| self.get_ray(i, j))
-                    .map(|ray| self.ray_color(&ray, self.max_depth, &world))
-                    .sum::<Color>();
-                pixel_sum / self.samples_per_pixel as f32
-            });
+                .map(|_| self.get_ray(i, j))
+                .map(|ray| self.ray_color(&ray, self.max_depth, &world))
+                .sum::<Color>();
+            pixel_sum / self.samples_per_pixel as f32
+            })
+            .collect::<Vec<Color>>();
         
         // create the file
-        let pixel_strings = pixel_colors
-            .map(|pc| linnear_to_gamma(&pc))
+        let pixel_strings = pixel_colors.iter()
+            .map(|pc| linnear_to_gamma(pc))
             .map(|pc| stringify_color(&pc))
             .join("\n");
         let string_header = format!("P3\n{} {}\n255\n", self.image_width, self.image_height);
@@ -213,18 +217,17 @@ impl Camera {
         .expect("Should be able to write to it as well.");
     }
 
-    fn ray_color(&self, ray: &Ray, depth: u32, world: &Vec<Box<dyn Hittable>>) -> Color {
+    fn ray_color(&self, ray: &Ray, depth: u32, world: &Vec<Shape>) -> Color {
         if depth <= 0 {
             return Color::ZERO;
         }
         let ray_trace = world.iter().fold(None, |acc, elem| 
             match acc {
                 None => elem.hit(&ray, Interval::new(0.001, INFINITY)),
-                Some(hr) => elem.hit(&ray, Interval::new(0.0, hr.t)).or(Some(hr)),
+                Some((hr, material)) => elem.hit(&ray, Interval::new(0.0, hr.t)).or(Some((hr, material))),
             });
 
-        if let Some(hit_record) = ray_trace {
-            let material = hit_record.material.clone();
+        if let Some((hit_record, material)) = ray_trace {
             if let Some((scattered_ray, attenuation)) = material.scatter(ray, &hit_record) {
                 return attenuation * self.ray_color(&scattered_ray, depth - 1, world);
             } else {
