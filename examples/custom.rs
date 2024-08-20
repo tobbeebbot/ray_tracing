@@ -25,8 +25,8 @@ fn main() {
 
     let camera = CameraBuilder::default()
         .set_image_width(800)
-        .set_max_depth(128)
-        .set_samples_per_pixel(128)
+        .set_max_depth(40)
+        .set_samples_per_pixel(64)
         .build();
-    camera.render(world);
+    camera.render(world).save("test23.png").unwrap();
 }
