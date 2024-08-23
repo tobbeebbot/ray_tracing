@@ -11,7 +11,7 @@ pub enum Material {
 }
 
 impl Material {
-    pub fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> Option<(Ray, Color) > {
+    pub fn scatter(&self, ray: &Ray, hit_record: &HitRecord) -> (Option<Ray>, Color) {
         use Material::*;
         match &self {
             Lambertian(albedo) => {
@@ -25,16 +25,16 @@ impl Material {
                 let scattered_ray = Ray::new(hit_record.point, scatter_direction);
 
                 let attenuation = *albedo;
-                Some((scattered_ray, attenuation))
+                (Some(scattered_ray), attenuation)
             },
             Metal(albedo, fuzz) => {
                 let reflection_dir = reflect(ray.dir.normalize(), hit_record.normal);
                 let scattered_ray = Ray::new(hit_record.point, reflection_dir + *fuzz * random_unit_vector());
                 
                 if scattered_ray.dir.dot(hit_record.normal) > 0.0 { 
-                    Some((scattered_ray, *albedo))
+                    (Some(scattered_ray), *albedo)
                 } else {
-                    None // fuzz may result in invalid rays inside of sphere
+                    (None, Color::ZERO) // fuzz may result in invalid rays inside of sphere, treat as absorbsion
                 }
             },
             Dielectric(ir) => {
@@ -66,7 +66,7 @@ impl Material {
 
                 let scattered_ray = Ray::new(hit_record.point, direction);
 
-                Some((scattered_ray, attenuation))
+                (Some(scattered_ray), attenuation)
             }
         }
     }

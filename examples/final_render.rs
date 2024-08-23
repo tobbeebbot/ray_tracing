@@ -1,24 +1,27 @@
-
+use glam::vec3;
 use itertools::Itertools;
 use rand::Rng;
-use ray_tracing::material::{Material::*, random_vec};
-use ray_tracing::hittable::*;
 use ray_tracing::camera::CameraBuilder;
-use glam::vec3;
+use ray_tracing::hittable::*;
+use ray_tracing::material::{random_vec, Material::*};
 
 fn main() {
     // World
 
-    
-    let mut world = (-11..11).cartesian_product(-11..11)
-    .map(|(a, b)| {
-        let a = a as f32;
-        let b = b as f32;
-        let center = vec3(a + 0.9 * rand::thread_rng().gen::<f32>(), 0.2, b + 0.9*rand::thread_rng().gen::<f32>());
-        center
-    })
-    .filter(|&center| ( center - vec3(4.0, 0.2, 0.0)).length() > 0.9)
-    .map(|center| {  
+    let mut world = (-11..11)
+        .cartesian_product(-11..11)
+        .map(|(a, b)| {
+            let a = a as f32;
+            let b = b as f32;
+            let center = vec3(
+                a + 0.9 * rand::thread_rng().gen::<f32>(),
+                0.2,
+                b + 0.9 * rand::thread_rng().gen::<f32>(),
+            );
+            center
+        })
+        .filter(|&center| (center - vec3(4.0, 0.2, 0.0)).length() > 0.9)
+        .map(|center| {
             let choose_mat = rand::thread_rng().gen::<f32>();
             let sphere_material = if choose_mat < 0.8 {
                 // diffuse
@@ -36,9 +39,13 @@ fn main() {
             Shape::new_sphere(center, 0.2, &sphere_material)
         })
         .collect::<Vec<Shape>>();
-    
+
     let ground_material = Lambertian(vec3(0.5, 0.5, 0.5));
-    world.push(Shape::new_sphere(vec3(0.0,-1000.0,0.0), 1000.0, &ground_material));
+    world.push(Shape::new_sphere(
+        vec3(0.0, -1000.0, 0.0),
+        1000.0,
+        &ground_material,
+    ));
 
     let material1 = Dielectric(1.5);
     world.push(Shape::new_sphere(vec3(0.0, 1.0, 0.0), 1.0, &material1));
@@ -50,13 +57,13 @@ fn main() {
     world.push(Shape::new_sphere(vec3(4.0, 1.0, 0.0), 1.0, &material3));
 
     let camera = CameraBuilder::default()
-        .set_image_width(800)
-        .set_samples_per_pixel(128)
-        .set_max_depth(50)
+        .set_image_width(1200)
+        .set_samples_per_pixel(512)
+        .set_max_depth(128)
         .set_vfov(20.0)
         .set_view_direction(vec3(13.0, 2.0, 3.0), vec3(0.0, 0.0, 0.0))
         .set_focus(0.6, 10.0)
         .build();
 
-    camera.render(world);
+    camera.render(&world).save("final.png").unwrap();
 }

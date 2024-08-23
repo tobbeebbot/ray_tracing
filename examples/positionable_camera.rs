@@ -27,5 +27,5 @@ fn main() {
         .set_focus(11.0, 3.4)
         .build();
 
-    camera.render(world);
+    camera.render(&world).save("positionable.png").unwrap();
 }

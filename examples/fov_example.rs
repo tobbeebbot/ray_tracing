@@ -22,5 +22,5 @@ fn main() {
 
     let camera = CameraBuilder::default().build();
 
-    camera.render(world);
+    camera.render(&world).save("fov.png").unwrap();
 }

@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::{hittable::Shape, material::Material};
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 enum WorldMaterial {
     Lambertian {
@@ -33,8 +33,8 @@ impl Into<Material> for WorldMaterial {
     }
 }
 
-#[derive(Deserialize, Debug)]
-struct WorldSphere {
+#[derive(Deserialize, Debug, Clone)]
+pub struct WorldSphere {
     x: f32,
     y: f32,
     z: f32,
@@ -48,7 +48,7 @@ impl Into<Shape> for WorldSphere {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct World {
     objects: Vec<WorldSphere>,
 }
@@ -56,6 +56,12 @@ pub struct World {
 impl Into<Vec<Shape>> for World {
     fn into(self) -> Vec<Shape> {
         self.objects.into_iter().map(|shape| shape.into()).collect_vec()
+    }
+}
+
+impl World {
+    pub fn add(&mut self, sphere: WorldSphere) -> () {
+        self.objects.push(sphere)
     }
 }
 

@@ -125,21 +125,6 @@ pub struct Camera {
     pub defocus_angle: f32,
 }
 pub type Color = Vec3;
-fn stringify_color(color: &Color) -> String {
-    format!(
-        "{} {} {}",
-        color.x * 255.99,
-        color.y * 255.99,
-        color.z * 255.99
-    )
-}
-fn linnear_to_gamma(color: &Color) -> Color {
-    Color {
-        x: color.x.sqrt(),
-        y: color.y.sqrt(),
-        z: color.z.sqrt(),
-    }
-}
 
 impl Camera {
     pub fn new(
@@ -204,7 +189,7 @@ impl Camera {
         }
     }
 
-    pub fn render(&self, world: Vec<Shape>) -> RgbImage {
+    pub fn render(&self, world: &Vec<Shape>) -> RgbImage {
         let mut buffer: RgbImage = ImageBuffer::new(self.image_width, self.image_height);
         let num_pixels = self.image_height * self.image_width;
 
@@ -223,7 +208,7 @@ impl Camera {
         buffer
     }
 
-    pub fn render_bytes(&self, world: Vec<Shape>) -> Vec<u8> {
+    pub fn render_bytes(&self, world: &Vec<Shape>) -> Vec<u8> {
         let image = self.render(world);
 
         let mut image_buffer = Vec::new();
@@ -237,26 +222,22 @@ impl Camera {
         if depth <= 0 {
             return Color::ZERO;
         }
-        let ray_trace = world.iter().fold(None, |acc, elem| match acc {
-            None => elem.hit(&ray, Interval::new(0.001, INFINITY)),
-            Some((hr, material)) => elem
-                .hit(&ray, Interval::new(0.0, hr.t))
-                .or(Some((hr, material))),
-        });
 
-        if let Some((hit_record, material)) = ray_trace {
-            if let Some((scattered_ray, attenuation)) = material.scatter(ray, &hit_record) {
-                return attenuation * self.ray_color(&scattered_ray, depth - 1, world);
-            } else {
-                // Not getting a scatter back is absorbtion
-                return Color::new(0.0, 0.0, 0.0);
-            }
-        }
-
-        // background
-        let unit_direction = ray.dir.normalize();
-        let a = 0.5 * (unit_direction.y + 1.0);
-        vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), a)
+        find_hit(world, ray).map_or_else(
+            || {
+                // No hit => means background color
+                let unit_direction = ray.dir.normalize();
+                let a = 0.5 * (unit_direction.y + 1.0);
+                let background = vec3(1.0, 1.0, 1.0).lerp(vec3(0.5, 0.7, 1.0), a);
+                background
+            },
+            |(hit_record, material)| {
+                let (scattered_ray, attenuation) = material.scatter(&ray, &hit_record);
+                scattered_ray.map_or(attenuation, |ray| {
+                    attenuation * self.ray_color(&ray, depth - 1, world)
+                })
+            },
+        )
     }
 
     fn get_ray(&self, i: u32, j: u32) -> Ray {
@@ -304,4 +285,16 @@ impl Camera {
             }
         }
     }
+}
+
+fn find_hit<'a>(
+    world: &'a Vec<Shape>,
+    ray: &'a Ray,
+) -> Option<(crate::hittable::HitRecord, &'a crate::material::Material)> {
+    world.iter().fold(None, |acc, elem| match acc {
+        None => elem.hit(&ray, Interval::new(0.001, INFINITY)),
+        Some((hr, material)) => elem
+            .hit(&ray, Interval::new(0.001, hr.t))
+            .or(Some((hr, material))),
+    })
 }
